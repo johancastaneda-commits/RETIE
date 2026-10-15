@@ -1,3 +1,4 @@
+import os
 from google import genai
 import pypdf
 import streamlit as st
@@ -8,47 +9,76 @@ st.set_page_config(
 
 st.title("⚡ Asistente de Consulta RETIE con Inteligencia Artificial")
 st.markdown(
-    "Sube tus documentos PDF, ingresa tu clave de la API de Google y realiza"
-    " cualquier consulta técnica en lenguaje natural."
+    "Plataforma inteligente con normativa precargada para consultas técnicas"
+    " en lenguaje natural y referencias bibliográficas exactas."
 )
 
-# BARRA LATERAL: CONFIGURACIÓN Y ARCHIVOS
-st.sidebar.header("⚙️ Configuración")
 
-# 1. Input para la API Key de Google
+# FUNCIÓN PARA CARGAR Y CACHEAR LOS PDFs DESDE LA CARPETA DEL REPOSITORIO
+@st.cache_resource
+def cargar_documentos_precargados():
+  document_database = []
+  carpeta_docs = "documentos"
+
+  if not os.path.exists(carpeta_docs):
+    os.makedirs(carpeta_docs)
+    return (
+        document_database,
+        f"La carpeta '{carpeta_docs}' no existe. Sube tus PDFs allí en GitHub.",
+    )
+
+  archivos = [f for f in os.listdir(carpeta_docs) if f.lower().endswith(".pdf")]
+
+  if not archivos:
+    return (
+        document_database,
+        f"No se encontraron archivos PDF dentro de la carpeta '{carpeta_docs}'.",
+    )
+
+  for archivo in archivos:
+    ruta_archivo = os.path.join(carpeta_docs, archivo)
+    try:
+      reader = pypdf.PdfReader(ruta_archivo)
+      for page_num, page in enumerate(reader.pages):
+        text = page.extract_text()
+        if text:
+          document_database.append({
+              "doc_name": archivo,
+              "page": page_num + 1,
+              "content": text,
+          })
+    except Exception as e:
+      st.error(f"Error al leer el archivo {archivo}: {e}")
+
+  return (
+      document_database,
+      f"¡{len(archivos)} documentos precargados y listos! ({len(document_database)}"
+      f" páginas indexadas).",
+  )
+
+
+# BARRA LATERAL: CONFIGURACIÓN Y ESTADO DE LOS DOCUMENTOS
+st.sidebar.header("⚙️ Configuración")
 api_key = st.sidebar.text_input(
     "🔑 Google Gemini API Key",
     type="password",
-    help=(
-        "Obtén tu clave gratis en Google AI Studio (aistudio.google.com)"
-    ),
+    help="Obtén tu clave gratis en Google AI Studio (aistudio.google.com)",
 )
 
 st.sidebar.markdown("---")
-st.sidebar.header("📁 Carga de Documentos")
-uploaded_files = st.sidebar.file_uploader(
-    "Sube tus archivos PDF aquí", type=["pdf"], accept_multiple_files=True
-)
+st.sidebar.header("📁 Base Documental")
 
-# Indexar documentos en memoria
-document_database = []
-if uploaded_files:
-  for uploaded_file in uploaded_files:
-    reader = pypdf.PdfReader(uploaded_file)
-    for page_num, page in enumerate(reader.pages):
-      text = page.extract_text()
-      if text:
-        document_database.append({
-            "doc_name": uploaded_file.name,
-            "page": page_num + 1,
-            "content": text,
-        })
-  st.sidebar.success(
-      f"¡{len(uploaded_files)} documentos indexados ({len(document_database)}"
-      f" páginas)!"
-  )
+# Cargar documentos de forma automática
+document_database, mensaje_estado = cargar_documentos_precargados()
+
+if document_database:
+  st.sidebar.success(mensaje_estado)
 else:
-  st.sidebar.info("👈 Sube tus PDFs en la barra lateral.")
+  st.sidebar.warning(mensaje_estado)
+  st.sidebar.info(
+      "ℹ️ Asegúrate de crear una carpeta llamada **'documentos'** en tu"
+      " repositorio de GitHub y subir allí tus archivos PDF."
+  )
 
 # ZONA PRINCIPAL DE CONSULTA CON IA
 if not api_key:
@@ -58,8 +88,8 @@ if not api_key:
   )
 elif not document_database:
   st.info(
-      "La aplicación está lista. Sube tus documentos PDF en la barra lateral"
-      " para comenzar a chatear con la IA."
+      "La aplicación está esperando a que coloques los archivos PDF en la"
+      " carpeta **'documentos'** de tu repositorio."
   )
 else:
   # Inicializar cliente de Google GenAI
@@ -97,10 +127,10 @@ else:
         for p in top_pages:
           context_text += f"\n--- [Documento: {p['doc_name']} | Página: {p['page']}] ---\n{p['content']}\n"
 
-        # Construcción del prompt estructurado para la IA
+        # Prompt estructurado para la IA
         prompt = f"""
                 Eres un ingeniero electricista senior y experto consultor en el RETIE (Reglamento Técnico de Instalaciones Eléctricas).
-                Analiza el siguiente contexto extraído de los documentos del usuario y responde de forma profesional, clara y detallada a la pregunta.
+                Analiza el siguiente contexto extraído de los documentos normativos y responde de forma profesional, clara y detallada a la pregunta.
                 
                 REGLAS OBLIGATORIAS:
                 1. Basate estrictamente en el contexto provisto de los documentos PDF.
@@ -113,9 +143,9 @@ else:
                 """
 
         try:
-          # Llamada al modelo Gemini de Google
+          # Llamada actualizada al modelo correcto de Google Gemini
           response = client.models.generate_content(
-              model="gemini-2.5-flash",
+              model="gemini-3.8-flash",
               contents=prompt,
           )
 
