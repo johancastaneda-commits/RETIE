@@ -380,9 +380,9 @@ def build_prompt(
         + "\n\nPREGUNTA DEL USUARIO:\n"
         + question
         + "\n\nResponde con base en el contexto anterior. "
-        "Incluye las referencias [F#] junto a las afirmaciones "
-        "que cada fuente respalda. Si no existe evidencia "
-        "suficiente, indícalo expresamente."
+        + "Incluye las referencias [F#] junto a las afirmaciones "
+        + "que cada fuente respalda. Si no existe evidencia "
+        + "suficiente, indícalo expresamente."
     )
 
 
@@ -524,6 +524,18 @@ with st.form("retie_query_form"):
         max_value=15,
         value=TOP_K_DEFAULT,
     )
+
+    # Explicación clara sobre el parámetro integrada en la interfaz
+    with st.expander("ℹ️ ¿Qué significa el Número máximo de fragmentos de contexto?"):
+        st.markdown(
+            "Este parámetro define el **límite superior de párrafos o secciones normativas más relevantes** "
+            "que el sistema seleccionará de tus documentos PDF para enviárselos a la Inteligencia Artificial como "
+            "apoyo al momento de responder tu pregunta.\n\n"
+            "* **Un valor bajo (ej. 3 o 4):** Hace que la búsqueda sea ultra específica, enfocándose solo en las "
+            "partes más precisas, aunque podría omitir detalles complementarios si la respuesta está dispersa.\n"
+            "* **Un valor alto (ej. 12 a 15):** Permite enviarle más contexto e información amplia a la IA, lo cual es útil "
+            "para temas complejos, aunque puede incluir fragmentos menos relevantes."
+        )
 
     submitted = st.form_submit_button(
         "Consultar con IA",
