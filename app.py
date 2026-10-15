@@ -13,7 +13,7 @@ st.markdown(
     " en lenguaje natural y referencias bibliográficas exactas."
 )
 
-# CARGAR LA API KEY DE FORMA SEGURA DESDE LOS SECRETOS
+# 1. CARGAR LA API KEY DE FORMA SEGURA DESDE LOS SECRETOS DE STREAMLIT
 try:
   api_key = st.secrets["GEMINI_API_KEY"]
 except Exception:
@@ -25,25 +25,22 @@ except Exception:
   st.stop()
 
 
-# FUNCIÓN PARA CARGAR Y CACHEAR LOS PDFs DESDE LA CARPETA DEL REPOSITORIO
+# 2. FUNCIÓN PARA CARGAR Y CACHEAR LOS PDFs DESDE LA RAIZ DEL REPOSITORIO
 @st.cache_resource
 def cargar_documentos_precargados():
   document_database = []
-  carpeta_docs = "documentos"
+  carpeta_docs = (
+      "."  # Lee directamente la carpeta principal donde subiste los 4 PDFs
+  )
 
-  if not os.path.exists(carpeta_docs):
-    os.makedirs(carpeta_docs)
-    return (
-        document_database,
-        f"La carpeta '{carpeta_docs}' no existe. Sube tus PDFs allí en GitHub.",
-    )
-
-  archivos = [f for f in os.listdir(carpeta_docs) if f.lower().endswith(".pdf")]
+  archivos = [
+      f for f in os.listdir(carpeta_docs) if f.lower().endswith(".pdf")
+  ]
 
   if not archivos:
     return (
         document_database,
-        f"No se encontraron archivos PDF dentro de la carpeta '{carpeta_docs}'.",
+        "No se encontraron archivos PDF en el repositorio.",
     )
 
   for archivo in archivos:
@@ -63,7 +60,7 @@ def cargar_documentos_precargados():
 
   return (
       document_database,
-      f"¡{len(archivos)} documentos precargados y listos! ({len(document_database)}"
+      f"¡{len(archivos)} documentos cargados y listos! ({len(document_database)}"
       f" páginas indexadas).",
   )
 
@@ -76,16 +73,12 @@ if document_database:
   st.sidebar.success(mensaje_estado)
 else:
   st.sidebar.warning(mensaje_estado)
-  st.sidebar.info(
-      "ℹ️ Asegúrate de tener la carpeta **'documentos'** en tu repositorio de"
-      " GitHub con tus PDFs adentro."
-  )
 
 # ZONA PRINCIPAL DE CONSULTA CON IA
 if not document_database:
   st.info(
-      "La aplicación está esperando a que coloques los archivos PDF en la"
-      " carpeta **'documentos'** de tu repositorio."
+      "La aplicación está esperando a que coloques los archivos PDF en el"
+      " repositorio."
   )
 else:
   # Inicializar cliente de Google GenAI de forma privada
@@ -123,7 +116,7 @@ else:
         for p in top_pages:
           context_text += f"\n--- [Documento: {p['doc_name']} | Página: {p['page']}] ---\n{p['content']}\n"
 
-        # Prompt estructurado para la IA
+        # Prompt estructurado para la IA con el modelo correcto
         prompt = f"""
                 Eres un ingeniero electricista senior y experto consultor en el RETIE (Reglamento Técnico de Instalaciones Eléctricas).
                 Analiza el siguiente contexto extraído de los documentos normativos y responde de forma profesional, clara y detallada a la pregunta.
