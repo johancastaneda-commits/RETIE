@@ -569,7 +569,7 @@ with st.expander("ℹ️ ¿Qué son los fragmentos de contexto?"):
         verificación de las referencias normativas.
         """
     )
-
+)
 
     submitted = st.form_submit_button(
         "Consultar con IA",
