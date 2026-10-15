@@ -1,4 +1,5 @@
 import os
+import time
 from google import genai
 import pypdf
 import streamlit as st
@@ -29,9 +30,7 @@ except Exception:
 @st.cache_resource
 def cargar_documentos_precargados():
   document_database = []
-  carpeta_docs = (
-      "."  # Lee directamente la carpeta principal donde subiste los 4 PDFs
-  )
+  carpeta_docs = "."
 
   archivos = [
       f for f in os.listdir(carpeta_docs) if f.lower().endswith(".pdf")
@@ -116,7 +115,7 @@ else:
         for p in top_pages:
           context_text += f"\n--- [Documento: {p['doc_name']} | Página: {p['page']}] ---\n{p['content']}\n"
 
-        # Prompt estructurado para la IA con el modelo correcto
+        # Prompt estructurado para la IA
         prompt = f"""
                 Eres un ingeniero electricista senior y experto consultor en el RETIE (Reglamento Técnico de Instalaciones Eléctricas).
                 Analiza el siguiente contexto extraído de los documentos normativos y responde de forma profesional, clara y detallada a la pregunta.
@@ -132,17 +131,32 @@ else:
                 """
 
         try:
-          response = client.models.generate_content(
-              model="gemini-3.8-flash",
-              contents=prompt,
-          )
+          # SISTEMA DE REINTENTO AUTOMÁTICO ANTE ERRORES 503 DE ALTA DEMANDA
+          intentos = 3
+          response = None
+          for intento in range(intentos):
+            try:
+              response = client.models.generate_content(
+                  model="gemini-3.8-flash",
+                  contents=prompt,
+              )
+              break
+            except Exception as api_err:
+              if "503" in str(api_err) and intento < intentos - 1:
+                time.sleep(
+                    3
+                )  # Espera 3 segundos antes de reintentar automáticamente
+                continue
+              else:
+                raise api_err
 
           st.markdown("### 📋 Análisis y Respuesta:")
           st.markdown(response.text)
 
         except Exception as e:
           st.error(
-              f"Ocurrió un error al conectar con la API de Google Gemini: {e}"
+              f"Ocurrió un error al conectar con la API de Google Gemini (los"
+              f" servidores están ocupados): {e}"
           )
     else:
       st.warning("Por favor, escribe una pregunta válida.")
