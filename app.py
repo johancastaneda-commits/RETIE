@@ -64,7 +64,7 @@ def cargar_documentos_precargados():
   )
 
 
-# BARRA LATERAL: ESTADO DE LA BASE DOCUMENTAL
+# BARRA LATERAL: ESTADO DE LA BASE DOCUMENTAL Y LISTADO OFICIAL
 st.sidebar.header("📁 Base Documental")
 document_database, mensaje_estado = cargar_documentos_precargados()
 
@@ -72,6 +72,20 @@ if document_database:
   st.sidebar.success(mensaje_estado)
 else:
   st.sidebar.warning(mensaje_estado)
+
+# Sección informativa de los libros utilizados en el menú lateral
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📚 Normativa Indexada:")
+st.sidebar.markdown("""
+- **Libro 1.** Aspectos Generales  
+  *(Resolución 40284 de 2026)*
+- **Libro 2.** Productos objeto del RETIE  
+  *(Resolución 40284 de 2026)*
+- **Libro 3.** Instalaciones objeto del RETIE  
+  *(Resolución 40284 de 2026)*
+- **Libro 4.** Evaluación de la conformidad  
+  *(Resolución 40284 de 2026)*
+""")
 
 # ZONA PRINCIPAL DE CONSULTA CON IA
 if not document_database:
@@ -143,9 +157,7 @@ else:
               break
             except Exception as api_err:
               if "503" in str(api_err) and intento < intentos - 1:
-                time.sleep(
-                    3
-                )  # Espera 3 segundos antes de reintentar automáticamente
+                time.sleep(3)
                 continue
               else:
                 raise api_err
