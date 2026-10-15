@@ -130,7 +130,7 @@ else:
 
         # Prompt estructurado para la IA
         prompt = f"""
-                Eres un ingeniero electricista senior y experto consultor en el RETIE (Reglamento Técnico de Instalaciones Eléctricas).
+                Eres un ingeniero en Telecomunicaciones senior y consultor en el RETIE (Reglamento Técnico de Instalaciones Eléctricas).
                 Analiza el siguiente contexto extraído de los documentos normativos y responde de forma profesional, clara y detallada a la pregunta.
                 
                 REGLAS OBLIGATORIAS:
