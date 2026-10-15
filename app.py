@@ -518,12 +518,58 @@ with st.form("retie_query_form"):
         height=120,
     )
 
-    top_k = st.slider(
-        "Número máximo de fragmentos de contexto",
-        min_value=3,
-        max_value=15,
-        value=TOP_K_DEFAULT,
+
+top_k = st.slider(
+    "Número máximo de fragmentos de contexto",
+    min_value=3,
+    max_value=15,
+    value=TOP_K_DEFAULT,
+    help=(
+        "Define cuántos fragmentos de los documentos RETIE "
+        "se seleccionarán como contexto para generar la respuesta."
+    ),
+)
+
+with st.expander("ℹ️ ¿Qué son los fragmentos de contexto?"):
+    st.markdown(
+        """
+        Los **fragmentos de contexto** son porciones de texto
+        extraídas de los documentos PDF del RETIE. La aplicación
+        divide el contenido en segmentos y busca aquellos que
+        tienen mayor relación con la pregunta formulada.
+
+        **¿Cómo funciona?**
+
+        1. **División documental:** el texto de los PDF se divide
+           en fragmentos de aproximadamente 2.200 caracteres.
+        2. **Búsqueda por relevancia:** se comparan las palabras
+           de la pregunta con el contenido de los fragmentos.
+        3. **Selección de contexto:** se eligen los fragmentos
+           más relevantes para enviarlos a Gemini.
+        4. **Generación de respuesta:** Gemini analiza el contexto
+           seleccionado y redacta una respuesta basada en él.
+
+        **¿Qué significa el número seleccionado?**
+
+        Este control establece el número máximo de fragmentos
+        que se intentarán utilizar para responder la consulta.
+
+        - **3 a 5 fragmentos:** contexto más reducido.
+        - **6 a 10 fragmentos:** equilibrio entre contexto y
+          cantidad de información.
+        - **11 a 15 fragmentos:** mayor cantidad de contexto,
+          lo que puede ayudar en consultas complejas.
+
+        La cantidad de fragmentos no garantiza la exactitud de
+        la respuesta. Si la información pertinente no se recupera
+        de los documentos, la respuesta puede ser incompleta.
+
+        **Importante:** cada fragmento conserva el nombre del
+        PDF y el número de página de origen para facilitar la
+        verificación de las referencias normativas.
+        """
     )
+
 
     submitted = st.form_submit_button(
         "Consultar con IA",
