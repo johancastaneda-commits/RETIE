@@ -491,6 +491,17 @@ with st.sidebar:
         "de cada respuesta será el PDF recuperado."
     )
 
+    # NUEVO APARTADO: ENLACE A LA FUENTE OFICIAL / RAÍZ
+    st.divider()
+    st.markdown("🌐 **Fuente Oficial y Actualizaciones**")
+    st.markdown(
+        "[MinEnergia - RETIE Oficial]("
+        "https://www.minenergia.gov.co/es/misional/energia-electrica-2/"
+        "reglamentos-tecnicos/reglamento-t%C3%A9cnico-de-instalaciones-el%C3%A9ctricas-retie/"
+        ")"
+    )
+    st.caption("Visita el enlace oficial para verificar la información más actualizada en su fuente raíz.")
+
 
 # ============================================================
 # 10. INTERFAZ DE CONSULTA
@@ -525,7 +536,6 @@ with st.form("retie_query_form"):
         value=TOP_K_DEFAULT,
     )
 
-    # Explicación clara sobre el parámetro integrada en la interfaz
     with st.expander("ℹ️ ¿Qué significa el Número máximo de fragmentos de contexto?"):
         st.markdown(
             "Este parámetro define el **límite superior de párrafos o secciones normativas más relevantes** "
