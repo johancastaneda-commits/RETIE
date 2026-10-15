@@ -11,7 +11,6 @@ st.set_page_config(
 st.title("⚡ Asistente de Consulta RETIE con Inteligencia Artificial")
 st.markdown(
     "Plataforma inteligente con normativa precargada para consultas técnicas"
-    " en lenguaje natural y referencias bibliográficas exactas."
 )
 
 # 1. CARGAR LA API KEY DE FORMA SEGURA DESDE LOS SECRETOS DE STREAMLIT
