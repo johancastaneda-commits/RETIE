@@ -13,6 +13,17 @@ st.markdown(
     " en lenguaje natural y referencias bibliográficas exactas."
 )
 
+# CARGAR LA API KEY DE FORMA SEGURA DESDE LOS SECRETOS
+try:
+  api_key = st.secrets["GEMINI_API_KEY"]
+except Exception:
+  st.error(
+      "⚠️ **Error de Configuración:** No se encontró la `GEMINI_API_KEY` en"
+      " los secretos de Streamlit. Por favor, configúrala en el panel de"
+      " administración de tu app."
+  )
+  st.stop()
+
 
 # FUNCIÓN PARA CARGAR Y CACHEAR LOS PDFs DESDE LA CARPETA DEL REPOSITORIO
 @st.cache_resource
@@ -57,18 +68,8 @@ def cargar_documentos_precargados():
   )
 
 
-# BARRA LATERAL: CONFIGURACIÓN Y ESTADO DE LOS DOCUMENTOS
-st.sidebar.header("⚙️ Configuración")
-api_key = st.sidebar.text_input(
-    "🔑 Google Gemini API Key",
-    type="password",
-    help="Obtén tu clave gratis en Google AI Studio (aistudio.google.com)",
-)
-
-st.sidebar.markdown("---")
+# BARRA LATERAL: ESTADO DE LA BASE DOCUMENTAL
 st.sidebar.header("📁 Base Documental")
-
-# Cargar documentos de forma automática
 document_database, mensaje_estado = cargar_documentos_precargados()
 
 if document_database:
@@ -76,23 +77,18 @@ if document_database:
 else:
   st.sidebar.warning(mensaje_estado)
   st.sidebar.info(
-      "ℹ️ Asegúrate de crear una carpeta llamada **'documentos'** en tu"
-      " repositorio de GitHub y subir allí tus archivos PDF."
+      "ℹ️ Asegúrate de tener la carpeta **'documentos'** en tu repositorio de"
+      " GitHub con tus PDFs adentro."
   )
 
 # ZONA PRINCIPAL DE CONSULTA CON IA
-if not api_key:
-  st.warning(
-      "⚠️ Por favor, ingresa tu **Google Gemini API Key** en la barra lateral"
-      " para activar el asistente de IA."
-  )
-elif not document_database:
+if not document_database:
   st.info(
       "La aplicación está esperando a que coloques los archivos PDF en la"
       " carpeta **'documentos'** de tu repositorio."
   )
 else:
-  # Inicializar cliente de Google GenAI
+  # Inicializar cliente de Google GenAI de forma privada
   client = genai.Client(api_key=api_key)
 
   st.markdown("---")
@@ -143,7 +139,6 @@ else:
                 """
 
         try:
-          # Llamada actualizada al modelo correcto de Google Gemini
           response = client.models.generate_content(
               model="gemini-3.8-flash",
               contents=prompt,
