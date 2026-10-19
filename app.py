@@ -4,6 +4,7 @@ import os
 import random
 import re
 import time
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +47,25 @@ st.caption(
 
 
 # ============================================================
-# 2. CONFIGURACIÓN SEGURA
+# 2. SISTEMA DE LOGS Y DEPURACIÓN EN SESIÓN
+# ============================================================
+
+if "app_logs" not in st.session_state:
+    st.session_state.app_logs = []
+
+
+def log_event(level: str, message: str):
+    """Registra eventos y errores en la memoria de la sesión para mostrarlos en la UI."""
+    timestamp = time.strftime("%H:%M:%S")
+    entry = f"[{timestamp}] [{level}] {message}"
+    st.session_state.app_logs.append(entry)
+    # Limita el histórico a 100 eventos para evitar saturar la memoria
+    if len(st.session_state.app_logs) > 100:
+        st.session_state.app_logs.pop(0)
+
+
+# ============================================================
+# 3. CONFIGURACIÓN SEGURA
 # ============================================================
 
 def get_secret(name: str, default: str = "") -> str:
@@ -63,6 +82,7 @@ API_KEY = get_secret("GEMINI_API_KEY")
 MODEL_NAME = get_secret("GEMINI_MODEL", MODEL_DEFAULT)
 
 if not API_KEY:
+    log_event("CRITICAL", "No se encontró la clave GEMINI_API_KEY en los secretos.")
     st.error(
         "No se encuentra GEMINI_API_KEY. Configúrala en "
         "los secretos de Streamlit o como variable de entorno."
@@ -73,16 +93,18 @@ if not API_KEY:
 @st.cache_resource(show_spinner=False)
 def get_gemini_client(api_key: str):
     """Reutiliza el cliente durante la vida del proceso."""
+    log_event("INFO", "Inicializando cliente de Google GenAI.")
     return genai.Client(api_key=api_key)
 
 
 # ============================================================
-# 3. DETECCIÓN DE CAMBIOS EN LOS PDF
+# 4. DETECCIÓN DE CAMBIOS EN LOS PDF
 # ============================================================
 
 def get_pdf_manifest(directory: Path) -> tuple:
     """Genera una firma de archivos para invalidar el caché."""
     if not directory.exists():
+        log_event("WARNING", f"El directorio de documentos {directory} no existe.")
         return ()
 
     entries = []
@@ -104,7 +126,7 @@ def get_pdf_manifest(directory: Path) -> tuple:
 
 
 # ============================================================
-# 4. DIVISIÓN DEL TEXTO EN FRAGMENTOS
+# 5. DIVISIÓN DEL TEXTO EN FRAGMENTOS
 # ============================================================
 
 def split_text(text: str) -> list[str]:
@@ -125,7 +147,6 @@ def split_text(text: str) -> list[str]:
         end = min(start + CHUNK_SIZE, len(text))
 
         if end < len(text):
-            # Intenta terminar en un límite natural.
             boundary = max(
                 text.rfind("\n", start, end),
                 text.rfind(". ", start, end),
@@ -150,7 +171,7 @@ def split_text(text: str) -> list[str]:
 
 
 # ============================================================
-# 5. CARGA E INDEXACIÓN DOCUMENTAL
+# 6. CARGA E INDEXACIÓN DOCUMENTAL
 # ============================================================
 
 @st.cache_resource(show_spinner=False)
@@ -163,6 +184,7 @@ def load_document_index(
     El manifiesto forma parte de la clave del caché.
     """
     directory = Path(directory_string)
+    log_event("INFO", f"Iniciando indexación desde el directorio: {directory_string}")
 
     chunks = []
     errors = []
@@ -177,9 +199,9 @@ def load_document_index(
             reader = pypdf.PdfReader(str(path))
 
             if reader.is_encrypted:
-                errors.append(
-                    f"{filename}: PDF cifrado; no se indexó."
-                )
+                msg = f"{filename}: PDF cifrado; no se indexó."
+                errors.append(msg)
+                log_event("WARNING", msg)
                 continue
 
             for page_number, page in enumerate(
@@ -188,10 +210,9 @@ def load_document_index(
                 try:
                     text = page.extract_text() or ""
                 except Exception:
-                    errors.append(
-                        f"{filename}, página {page_number}: "
-                        "no se pudo extraer el texto."
-                    )
+                    msg = f"{filename}, página {page_number}: no se pudo extraer texto."
+                    errors.append(msg)
+                    log_event("ERROR", msg)
                     continue
 
                 if not text.strip():
@@ -212,12 +233,12 @@ def load_document_index(
                     )
 
         except Exception as exc:
-            errors.append(
-                f"{filename}: error de lectura "
-                f"({type(exc).__name__})."
-            )
+            msg = f"{filename}: error de lectura ({type(exc).__name__})."
+            errors.append(msg)
+            log_event("ERROR", msg)
 
     if not chunks:
+        log_event("ERROR", "No se encontraron fragmentos de texto válidos en los PDFs.")
         return {
             "chunks": [],
             "vectorizer": None,
@@ -239,8 +260,10 @@ def load_document_index(
         matrix = vectorizer.fit_transform(
             [item["content"] for item in chunks]
         )
+        log_event("SUCCESS", f"Indexación finalizada: {files_found} archivos, {pages_read} páginas, {len(chunks)} fragmentos.")
     except ValueError:
         matrix = None
+        log_event("ERROR", "No fue posible construir la matriz TF-IDF.")
         errors.append(
             "No fue posible construir el índice de texto."
         )
@@ -256,7 +279,7 @@ def load_document_index(
 
 
 # ============================================================
-# 6. RECUPERACIÓN DE CONTEXTO RELEVANTE
+# 7. RECUPERACIÓN DE CONTEXTO RELEVANTE
 # ============================================================
 
 def retrieve_context(
@@ -265,11 +288,13 @@ def retrieve_context(
     top_k: int = TOP_K_DEFAULT,
 ) -> list[dict[str, Any]]:
     """Recupera los fragmentos más relacionados con la pregunta."""
+    log_event("INFO", f"Buscando contexto para la pregunta: '{question}' (Top K: {top_k})")
     chunks = index["chunks"]
     vectorizer = index["vectorizer"]
     matrix = index["matrix"]
 
     if not chunks or vectorizer is None or matrix is None:
+        log_event("WARNING", "El índice documental está vacío o no inicializado.")
         return []
 
     query_vector = vectorizer.transform([question])
@@ -309,7 +334,8 @@ def retrieve_context(
         if len(selected) >= top_k:
             break
 
-    # Limita el contexto para controlar el consumo de tokens.
+    log_event("INFO", f"Fragmentos relevantes encontrados: {len(selected)}")
+
     limited = []
     total_chars = 0
 
@@ -331,7 +357,7 @@ def retrieve_context(
 
 
 # ============================================================
-# 7. PROMPT NORMATIVO
+# 8. PROMPT NORMATIVO
 # ============================================================
 
 SYSTEM_INSTRUCTION = """
@@ -387,7 +413,7 @@ def build_prompt(
 
 
 # ============================================================
-# 8. CONSULTA A GEMINI Y REINTENTOS
+# 9. CONSULTA A GEMINI Y REINTENTOS
 # ============================================================
 
 def generate_answer(
@@ -397,6 +423,7 @@ def generate_answer(
 ) -> str:
     prompt = build_prompt(question, sources)
     last_error = None
+    log_event("INFO", f"Enviando solicitud al modelo '{MODEL_NAME}' con {len(sources)} fuentes.")
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -417,11 +444,13 @@ def generate_answer(
                     "El modelo no devolvió una respuesta textual."
                 )
 
+            log_event("SUCCESS", "Respuesta generada exitosamente por Gemini.")
             return answer.strip()
 
         except Exception as exc:
             last_error = exc
             message = str(exc).lower()
+            log_event("WARNING", f"Intento {attempt + 1}/{MAX_RETRIES} fallido. Detalle: {exc}")
 
             retryable = any(
                 marker in message
@@ -442,16 +471,19 @@ def generate_answer(
                 break
 
             delay = min(2 ** attempt + random.random(), 12)
+            log_event("INFO", f"Esperando {delay:.2f} segundos antes del siguiente reintento...")
             time.sleep(delay)
 
+    error_detail = traceback.format_exc()
+    log_event("CRITICAL", f"Error crítico tras agotar reintentos: {last_error}\n{error_detail}")
     raise RuntimeError(
         f"No fue posible completar la consulta. "
-        f"Tipo de error: {type(last_error).__name__}"
+        f"Tipo de error: {type(last_error).__name__} | Detalle: {last_error}"
     ) from last_error
 
 
 # ============================================================
-# 9. CARGA DE LA BASE DOCUMENTAL
+# 10. CARGA DE LA BASE DOCUMENTAL
 # ============================================================
 
 manifest = get_pdf_manifest(DOCS_DIR)
@@ -461,6 +493,7 @@ with st.sidebar:
     st.caption(f"Directorio: {DOCS_DIR.name or 'documentos'}")
 
     if st.button("🔄 Actualizar índice", use_container_width=True):
+        log_event("INFO", "Usuario solicitó vaciar caché y actualizar índice.")
         load_document_index.clear()
         st.rerun()
 
@@ -491,7 +524,6 @@ with st.sidebar:
         "de cada respuesta será el PDF recuperado."
     )
 
-    # NUEVO APARTADO: ENLACE A LA FUENTE OFICIAL / RAÍZ
     st.divider()
     st.markdown("🌐 **Fuente Oficial y Actualizaciones**")
     st.markdown(
@@ -502,12 +534,24 @@ with st.sidebar:
     )
     st.caption("Visita el enlace oficial para verificar la información más actualizada en su fuente raíz.")
 
+    # NUEVO APARTADO: PANEL DE LOGS EN TIEMPO REAL
+    st.divider()
+    st.subheader("🛠️ Consola de Logs")
+    with st.expander("🔍 Ver Registro de Depuración", expanded=False):
+        if st.button("Limpiar Logs", use_container_width=True):
+            st.session_state.app_logs = []
+            st.rerun()
+        
+        logs_display = "\n".join(st.session_state.app_logs) if st.session_state.app_logs else "Sin eventos registrados aún."
+        st.text_area("Eventos de la App", value=logs_display, height=250, disabled=True)
+
 
 # ============================================================
-# 10. INTERFAZ DE CONSULTA
+# 11. INTERFAZ DE CONSULTA
 # ============================================================
 
 if not index["chunks"]:
+    log_event("CRITICAL", "La aplicación se detuvo porque no hay fragmentos indexados disponibles.")
     st.warning(
         "No hay texto disponible para consultar. "
         "Verifica que existan PDF legibles en el directorio "
@@ -577,6 +621,7 @@ if submitted:
                 )
 
                 if not sources:
+                    log_event("WARNING", f"No se encontró evidencia documental para la pregunta: '{clean_question}'")
                     st.session_state.retie_history.insert(
                         0,
                         {
@@ -610,18 +655,19 @@ if submitted:
                     )
 
             except Exception as exc:
+                log_event("CRITICAL", f"Excepción capturada en la interfaz: {exc}")
                 st.error(
                     "No fue posible procesar la consulta. "
                     "Verifica la configuración de Gemini y "
                     "vuelve a intentarlo."
                 )
                 st.caption(
-                    f"Detalle técnico: {type(exc).__name__}"
+                    f"Detalle técnico: {type(exc).__name__} | {str(exc)}"
                 )
 
 
 # ============================================================
-# 11. PRESENTACIÓN DEL RESULTADO E HISTORIAL
+# 12. PRESENTACIÓN DEL RESULTADO E HISTORIAL
 # ============================================================
 
 if st.session_state.retie_history:
@@ -630,6 +676,7 @@ if st.session_state.retie_history:
 
     if st.button("Limpiar historial de esta sesión"):
         st.session_state.retie_history = []
+        log_event("INFO", "Historial de chat limpiado por el usuario.")
         st.rerun()
 
     for entry in st.session_state.retie_history:
